@@ -399,6 +399,11 @@ impl GetDataLocations for AntMinerV2020 {
             parameters: None,
         };
 
+        const WEB_STATS: MinerCommand = MinerCommand::WebAPI {
+            command: "stats",
+            parameters: None,
+        };
+
         const WEB_MINER_TYPE: MinerCommand = MinerCommand::WebAPI {
             command: "miner_type",
             parameters: None,
@@ -509,14 +514,27 @@ impl GetDataLocations for AntMinerV2020 {
                     tag: None,
                 },
             )],
-            DataField::Wattage => vec![(
-                RPC_STATS,
-                DataExtractor {
-                    func: get_by_pointer,
-                    key: Some("/STATS/1"),
-                    tag: None,
-                },
-            )],
+            DataField::Wattage => vec![
+                (
+                    RPC_STATS,
+                    DataExtractor {
+                        func: get_by_pointer,
+                        key: Some("/STATS/1"),
+                        tag: None,
+                    },
+                ),
+                // Newer stock firmware reports draw only on the web stats
+                // endpoint, as a `watt` field; the RPC stats payload carries no
+                // power reading at all on those generations.
+                (
+                    WEB_STATS,
+                    DataExtractor {
+                        func: get_by_pointer,
+                        key: Some("/STATS/0"),
+                        tag: None,
+                    },
+                ),
+            ],
             DataField::SerialNumber => vec![
                 (
                     WEB_SYSTEM_INFO,
@@ -835,6 +853,7 @@ impl GetWattage for AntMinerV2020 {
             if let Some(power) = stats_data
                 .get("power")
                 .or_else(|| stats_data.get("Power"))
+                .or_else(|| stats_data.get("watt"))
                 .and_then(|v| v.as_f64())
             {
                 return Some(Power::from_watts(power));
